@@ -1,11 +1,20 @@
-import { z } from 'zod';
-import { createToolCallAccuracyScorerCode } from '@mastra/evals/scorers/prebuilt';
-import { createCompletenessScorer } from '@mastra/evals/scorers/prebuilt';
+import { createScorer } from '@mastra/core/evals';
+import {
+  createCompletenessScorer,
+  createToolCallAccuracyScorerCode,
+} from '@mastra/evals/scorers/prebuilt';
 import {
   getAssistantMessageFromRunOutput,
   getUserMessageFromRunInput,
 } from '@mastra/evals/scorers/utils';
-import { createScorer } from '@mastra/core/evals';
+import { z } from 'zod';
+
+type TranslationAnalysisResult = {
+  confidence?: number;
+  explanation?: string;
+  nonEnglish?: boolean;
+  translated?: boolean;
+};
 
 export const toolCallAppropriatenessScorer = createToolCallAccuracyScorerCode({
   expectedTool: 'weatherTool',
@@ -68,14 +77,18 @@ export const translationScorer = createScorer({
         `,
   })
   .generateScore(({ results }) => {
-    const r = (results as any)?.analyzeStepResult || {};
+    const r =
+      (results as { analyzeStepResult?: TranslationAnalysisResult } | undefined)
+        ?.analyzeStepResult ?? {};
     if (!r.nonEnglish) return 1; // If not applicable, full credit
     if (r.translated)
       return Math.max(0, Math.min(1, 0.7 + 0.3 * (r.confidence ?? 1)));
     return 0; // Non-English but not translated
   })
   .generateReason(({ results, score }) => {
-    const r = (results as any)?.analyzeStepResult || {};
+    const r =
+      (results as { analyzeStepResult?: TranslationAnalysisResult } | undefined)
+        ?.analyzeStepResult ?? {};
     return `Translation scoring: nonEnglish=${r.nonEnglish ?? false}, translated=${r.translated ?? false}, confidence=${r.confidence ?? 0}. Score=${score}. ${r.explanation ?? ''}`;
   });
 
